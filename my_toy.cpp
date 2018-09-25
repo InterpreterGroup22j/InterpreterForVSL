@@ -114,8 +114,10 @@ static int gettok() {
     
     if (LastChar == ':'){
         LastChar = getchar(); //eat ':'
-        if(LastChar != '=')
+        if(LastChar != '='){
+            fprintf(stderr, "Error: Please use ':=' to assign.\n");
             return LastChar;
+        }
         else{
             LastChar = getchar(); //eat '='
             return tok_ASSIGN;
@@ -404,13 +406,23 @@ static std::unique_ptr<FunctionAST> ParseDefinition() {
     auto Proto = ParsePrototype();
     if (!Proto)
         return nullptr;
-    if(CurTok != '{')
+    if(CurTok != '{'){
+        fprintf(stderr, "Expected '{' in function definition.\n");
         return nullptr;
+    }
     else
         getNextToken(); // eat '{'
+    if(CurTok != tok_RETURN){
+        fprintf(stderr, "Expected 'RETURN' in function definition.\n");
+        return nullptr;
+    }
+    else
+        getNextToken(); // eat 'RETURN'
     if (auto E = ParseExpression()){
-        if(CurTok != '}')
+        if(CurTok != '}'){
+            fprintf(stderr, "Expected '}' in function definition.\n");
             return nullptr;
+        }
         else{
             getNextToken(); // eat '}'
             return llvm::make_unique<FunctionAST>(std::move(Proto), std::move(E));

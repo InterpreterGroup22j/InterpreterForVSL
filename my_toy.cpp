@@ -412,7 +412,7 @@ static std::unique_ptr<FunctionAST> ParseDefinition() {
         if(CurTok != '}')
             return nullptr;
         else{
-            getNextToken(); // eat '{'
+            getNextToken(); // eat '}'
             return llvm::make_unique<FunctionAST>(std::move(Proto), std::move(E));
         }
     }

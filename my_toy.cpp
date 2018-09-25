@@ -18,63 +18,113 @@ enum Token {
     tok_eof = -1,
     
     // commands
-    tok_def = -2,
-    tok_extern = -3,
+    tok_FUNC = -2,
+    tok_PRINT = -3,
+    tok_RETURN = -4,
+    tok_CONTINUE = -5,
+    tok_IF = -6,
+    tok_THEN = -7,
+    tok_ELSE = -8,
+    tok_FI = -9,
+    tok_WHILE = -10,
+    tok_DO = -11,
+    tok_DONE = -12,
+    tok_VAR = -13,
+    tok_ASSIGN = -14,
     
-    // primary
-    tok_identifier = -4,
-    tok_number = -5
+    //primary
+    tok_identifier = -15,
+    tok_number = -16,
+    tok_text = -17
 };
 
 static std::string IdentifierStr; // Filled in if tok_identifier
-static double NumVal;             // Filled in if tok_number
+static int NumVal;             // Filled in if tok_number
+static std::string text;       //Filled in tok_text
 
-/// gettok - Return the next token from standard input.
 static int gettok() {
     static int LastChar = ' ';
-    
-    // Skip any whitespace.
+    //skip any whitespace
     while (isspace(LastChar))
         LastChar = getchar();
     
-    if (isalpha(LastChar)) { // identifier: [a-zA-Z][a-zA-Z0-9]*
+    if (isalpha(LastChar)) {
+        // identifier: [a-zA-Z][a-zA-Z0-9]*
         IdentifierStr = LastChar;
         while (isalnum((LastChar = getchar())))
             IdentifierStr += LastChar;
         
-        if (IdentifierStr == "def")
-            return tok_def;
-        if (IdentifierStr == "extern")
-            return tok_extern;
+        if(IdentifierStr == "FUNC")
+            return tok_FUNC;
+        else if(IdentifierStr == "PRINT")
+            return tok_PRINT;
+        else if(IdentifierStr == "RETURN")
+            return tok_RETURN;
+        else if(IdentifierStr == "CONTINUE")
+            return tok_CONTINUE;
+        else if(IdentifierStr == "IF")
+            return tok_IF;
+        else if(IdentifierStr == "THEN")
+            return tok_THEN;
+        else if(IdentifierStr == "ELSE")
+            return tok_ELSE;
+        else if(IdentifierStr == "FI")
+            return tok_FI;
+        else if(IdentifierStr == "WHILE")
+            return tok_WHILE;
+        else if(IdentifierStr == "DO")
+            return tok_DO;
+        else if(IdentifierStr == "DONE")
+            return tok_DONE;
+        
         return tok_identifier;
     }
     
-    if (isdigit(LastChar) || LastChar == '.') { // Number: [0-9.]+
+    if (isdigit(LastChar)) {
+        // Number: [0-9]+
         std::string NumStr;
         do {
             NumStr += LastChar;
             LastChar = getchar();
-        } while (isdigit(LastChar) || LastChar == '.');
+        } while (isdigit(LastChar));
         
-        NumVal = strtod(NumStr.c_str(), nullptr);
+        NumVal = atoi(NumStr.c_str());
         return tok_number;
     }
     
-    if (LastChar == '#') {
-        // Comment until end of line.
-        do
+    if (LastChar == '"') {
+        std::string temp;
+        do{
+            temp += LastChar;
             LastChar = getchar();
-        while (LastChar != EOF && LastChar != '\n' && LastChar != '\r');
-        
-        if (LastChar != EOF)
-            return gettok();
+        }
+        while (LastChar != '"');
+        if(temp == "\"//"){
+            do
+                LastChar = getchar();
+            while (LastChar != EOF && LastChar != '\n' && LastChar != '\r');
+            if (LastChar != EOF)
+                return gettok();
+        }
+        else{
+            text = temp.substr(1, temp.length() - 1);
+            return tok_text;
+        }
     }
     
-    // Check for end of file.  Don't eat the EOF.
+    if (LastChar == ':'){
+        LastChar = getchar(); //eat ':'
+        if(LastChar != '=')
+            return LastChar;
+        else{
+            LastChar = getchar(); //eat '='
+            return tok_ASSIGN;
+        }
+    }
+    
     if (LastChar == EOF)
         return tok_eof;
     
-    // Otherwise, just return the character as its ascii value.
     int ThisChar = LastChar;
     LastChar = getchar();
     return ThisChar;
@@ -173,11 +223,15 @@ static std::map<char, int> BinopPrecedence;
 
 /// GetTokPrecedence - Get the precedence of the pending binary operator token.
 static int GetTokPrecedence() {
-    if (!isascii(CurTok))
+    if (!isascii(CurTok) && CurTok != -14)
         return -1;
     
     // Make sure it's a declared binop.
-    int TokPrec = BinopPrecedence[CurTok];
+    int TokPrec;
+    if(CurTok == -14)
+        TokPrec = BinopPrecedence['='];
+    else
+        TokPrec = BinopPrecedence[CurTok];
     if (TokPrec <= 0)
         return -1;
     return TokPrec;
@@ -346,13 +400,22 @@ static std::unique_ptr<PrototypeAST> ParsePrototype() {
 
 /// definition ::= 'def' prototype expression
 static std::unique_ptr<FunctionAST> ParseDefinition() {
-    getNextToken(); // eat def.
+    getNextToken(); // eat FUNC.
     auto Proto = ParsePrototype();
     if (!Proto)
         return nullptr;
-    
-    if (auto E = ParseExpression())
-        return llvm::make_unique<FunctionAST>(std::move(Proto), std::move(E));
+    if(CurTok != '{')
+        return nullptr;
+    else
+        getNextToken(); // eat '{'
+    if (auto E = ParseExpression()){
+        if(CurTok != '}')
+            return nullptr;
+        else{
+            getNextToken(); // eat '{'
+            return llvm::make_unique<FunctionAST>(std::move(Proto), std::move(E));
+        }
+    }
     return nullptr;
 }
 
@@ -415,11 +478,8 @@ static void MainLoop() {
             case ';': // ignore top-level semicolons.
                 getNextToken();
                 break;
-            case tok_def:
+            case tok_FUNC:
                 HandleDefinition();
-                break;
-            case tok_extern:
-                HandleExtern();
                 break;
             default:
                 HandleTopLevelExpression();
@@ -438,7 +498,8 @@ int main() {
     BinopPrecedence['<'] = 10;
     BinopPrecedence['+'] = 20;
     BinopPrecedence['-'] = 20;
-    BinopPrecedence['*'] = 40; // highest.
+    BinopPrecedence['*'] = 40;
+    BinopPrecedence['='] = 50;// highest.
     
     // Prime the first token.
     fprintf(stderr, "ready> ");
@@ -449,3 +510,4 @@ int main() {
     
     return 0;
 }
+

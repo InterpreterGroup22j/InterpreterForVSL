@@ -1,0 +1,1 @@
+完成了IF-THEN-ELSE-FI(即VSL语言IF-ELSE结构中的一种结构)，程序运行结果截图另见文件夹
